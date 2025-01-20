@@ -1,7 +1,7 @@
-import {expectType, expectError, expectAssignable} from 'tsd';
+import {expectType, expectAssignable} from 'tsd';
 import type {JsonValue, Opaque, ReadonlyDeep, WritableDeep} from '../index';
 import type {WritableObjectDeep} from '../source/writable-deep';
-import {type tag} from '../source/opaque';
+import type {tag} from '../source/tagged';
 
 type Overloaded = {
 	(foo: number): string;
@@ -64,7 +64,8 @@ const data = {
 const readonlyData: ReadonlyDeep<typeof data> = data;
 
 let writableData: WritableDeep<typeof readonlyData>;
-expectError(writableData = readonlyData);
+// @ts-expect-error
+writableData = readonlyData; // eslint-disable-line prefer-const
 
 writableData.fn('foo');
 
@@ -120,3 +121,18 @@ const fullyWritableData = {
 	},
 };
 expectAssignable<WritableDeep<ReadonlyDeep<typeof fullyWritableData>>>(fullyWritableData);
+
+// Standalone tests
+
+// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+const writableNamespace = {} as WritableDeep<{
+	(foo: number): string;
+	readonly baz: readonly boolean[];
+}>;
+expectType<((foo: number) => string) & {
+	baz: boolean[];
+}>(writableNamespace);
+expectAssignable<{
+	(foo: number): string;
+	baz: boolean[];
+}>(writableNamespace);

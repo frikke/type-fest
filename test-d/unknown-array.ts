@@ -1,4 +1,4 @@
-import {expectAssignable, expectError, expectNotAssignable, expectType} from 'tsd';
+import {expectAssignable, expectNotAssignable, expectType} from 'tsd';
 import type {UnknownArray} from '../index';
 
 declare const foo: readonly [];
@@ -12,11 +12,11 @@ expectAssignable<UnknownArray>([]);
 expectAssignable<UnknownArray>(['foo']);
 
 expectNotAssignable<UnknownArray>(null);
-expectNotAssignable(undefined);
-expectNotAssignable({});
-expectNotAssignable({0: 1});
-expectNotAssignable(1);
-expectNotAssignable(Date);
+expectNotAssignable<UnknownArray>(undefined);
+expectNotAssignable<UnknownArray>({});
+expectNotAssignable<UnknownArray>({0: 1});
+expectNotAssignable<UnknownArray>(1);
+expectNotAssignable<UnknownArray>(Date);
 
 type IsArray<T> = T extends UnknownArray ? true : false;
 

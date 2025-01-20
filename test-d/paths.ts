@@ -1,4 +1,4 @@
-import {expectType} from 'tsd';
+import {expectAssignable, expectNotAssignable, expectType} from 'tsd';
 import type {Paths} from '../index';
 
 declare const normal: Paths<{foo: string}>;
@@ -16,7 +16,14 @@ type DeepObject = {
 	};
 };
 declare const deepObject: Paths<DeepObject>;
-expectType<'a' | 'a.b' | 'a.b2' | 'a.b3' | 'a.b.c' | 'a.b.c.d' | `a.b2.${number}`>(deepObject);
+type DeepPath = 'a' | 'a.b' | 'a.b2' | 'a.b3' | 'a.b.c' | 'a.b.c.d' | `a.b2.${number}`;
+expectType<DeepPath>(deepObject);
+
+// Test for interface
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+interface InterfaceType extends DeepObject {}
+declare const interfaceType: Paths<InterfaceType>;
+expectType<DeepPath>(interfaceType);
 
 declare const emptyObject: Paths<{}>;
 expectType<never>(emptyObject);
@@ -60,6 +67,24 @@ expectType<'a'>(record);
 declare const record2: Paths<Record<1, unknown>>;
 expectType<1 | '1'>(record2);
 
+declare const map: Paths<{foo?: {bar?: Map<string, number>}}>;
+expectType<'foo' | 'foo.bar'>(map);
+
+declare const map2: Paths<Map<string, number>>;
+expectType<never>(map2);
+
+declare const readonlyMap: Paths<{foo?: {bar?: ReadonlyMap<string, number>}}>;
+expectType<'foo' | 'foo.bar'>(readonlyMap);
+
+declare const set: Paths<{foo?: {bar?: Set<string>}}>;
+expectType<'foo' | 'foo.bar'>(set);
+
+declare const set2: Paths<Set<string>>;
+expectType<never>(set2);
+
+declare const readonlySet: Paths<{foo?: {bar?: ReadonlySet<string>}}>;
+expectType<'foo' | 'foo.bar'>(readonlySet);
+
 // Test for unknown length array
 declare const trailingSpreadTuple: Paths<[{a: string}, ...Array<{b: number}>]>;
 expectType<number | `${number}` | '0.a' | `${number}.b`>(trailingSpreadTuple);
@@ -73,3 +98,51 @@ expectType<number | `${number}` | `${number}.b` | `${number}.a`>(leadingSpreadTu
 
 declare const leadingSpreadTuple1: Paths<[...Array<{a: string}>, {b: number}, {c: number}]>;
 expectType<number | `${number}` | `${number}.b` | `${number}.c` | `${number}.a`>(leadingSpreadTuple1);
+
+// Circularly references
+type MyEntity = {
+	myOtherEntity?: MyOtherEntity;
+};
+type MyOtherEntity = {
+	myEntity?: MyEntity;
+};
+type MyEntityPaths = Paths<MyEntity>;
+expectAssignable<string>({} as MyEntityPaths);
+
+// By default, the recursion limit should be reasonably long
+type RecursiveFoo = {foo: RecursiveFoo};
+expectAssignable<Paths<RecursiveFoo>>('foo.foo.foo.foo.foo.foo.foo.foo');
+
+declare const recursion0: Paths<RecursiveFoo, {maxRecursionDepth: 0}>;
+expectType<'foo'>(recursion0);
+
+declare const recursion1: Paths<RecursiveFoo, {maxRecursionDepth: 1}>;
+expectType<'foo' | 'foo.foo'>(recursion1);
+
+// Test a[0].b style
+type Object1 = {
+	arr: [{a: string}];
+};
+expectType<Paths<Object1, {bracketNotation: true}>>({} as 'arr' | 'arr[0]' | 'arr[0].a');
+
+type Object2 = {
+	arr: Array<{a: string}>;
+	arr1: string[];
+};
+expectType<Paths<Object2, {bracketNotation: true}>>({} as 'arr' | 'arr1' | `arr[${number}]` | `arr[${number}].a` | `arr1[${number}]`);
+
+type Object3 = {
+	1: 'foo';
+	'2': 'bar';
+};
+expectType<Paths<Object3, {bracketNotation: true}>>({} as '[1]' | '[2]');
+
+type deepArray = {
+	arr: Array<Array<Array<{a: string}>>>;
+};
+expectType<Paths<deepArray, {bracketNotation: true}>>({} as 'arr' | `arr[${number}]` | `arr[${number}][${number}]` | `arr[${number}][${number}][${number}]` | `arr[${number}][${number}][${number}].a`);
+
+type RecursionArray = RecursionArray[];
+type RecursionArrayPaths = Paths<RecursionArray, {bracketNotation: true; maxRecursionDepth: 3}>;
+expectAssignable<RecursionArrayPaths>({} as `[${number}][${number}][${number}][${number}]`);
+expectNotAssignable<RecursionArrayPaths>({} as `[${number}][${number}][${number}][${number}][${number}]`);

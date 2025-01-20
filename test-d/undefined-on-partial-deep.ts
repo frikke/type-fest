@@ -1,8 +1,6 @@
-/**
-@note This file is used for testing by `tsc` but not `tsd`, so we can just test assignable.
-*/
+// TODO: Test equality
 import {expectAssignable} from 'tsd';
-import type {UndefinedOnPartialDeep} from '../../source/undefined-on-partial-deep';
+import type {UndefinedOnPartialDeep} from '../source/undefined-on-partial-deep';
 
 type TestType1 = UndefinedOnPartialDeep<{required: string; optional?: string; optional2?: number; optional3?: string}>;
 expectAssignable<TestType1>({required: '', optional: undefined, optional2: 1});
@@ -28,7 +26,7 @@ type MixedType = UndefinedOnPartialDeep<{
 	symbol?: symbol;
 	date?: Date;
 	regExp?: RegExp;
-	func?: (args0: string, args1: number) => boolean;
+	func?: (arguments0: string, arguments1: number) => boolean;
 }>;
 expectAssignable<MixedType>({
 	required: '',

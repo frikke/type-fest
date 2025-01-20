@@ -1,5 +1,5 @@
-import {expectType, expectError, expectAssignable} from 'tsd';
-import type {Opaque, tag} from '../source/opaque';
+import {expectType, expectAssignable} from 'tsd';
+import type {Opaque, tag} from '../source/tagged';
 import type {ReadonlyDeep, ReadonlyObjectDeep} from '../source/readonly-deep';
 import type {JsonValue} from '../source/basic';
 
@@ -75,7 +75,8 @@ expectType<typeof ClassA>(readonlyData.constructor);
 const instance = new readonlyData.constructor();
 instance.foo = 2; // Constructor is not made readonly
 
-expectError(readonlyData.string = 'bar');
+// @ts-expect-error
+readonlyData.string = 'bar';
 expectType<{readonly foo: string}>(readonlyData.object);
 expectType<string>(readonlyData.string);
 expectType<number>(readonlyData.number);
@@ -110,3 +111,30 @@ expectType<NamespaceWithOverload>(readonlyData.namespaceWithOverload);
 expectType<string>(readonlyData.namespaceWithOverload(1));
 expectType<number>(readonlyData.namespaceWithOverload('foo', 1));
 expectType<boolean[]>(readonlyData.namespaceWithOverload.baz);
+
+// Test void
+type VoidType = {
+	foo: void;
+	bar: string | void;
+};
+type VoidTypeExpected = {
+	readonly foo: void;
+	readonly bar: string | void;
+};
+declare const voidType: ReadonlyDeep<VoidType>;
+expectType<VoidTypeExpected>(voidType);
+
+// Standalone tests
+
+// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+const readonlyNamespace = {} as ReadonlyDeep<{
+	(foo: number): string;
+	baz: boolean[];
+}>;
+expectType<((foo: number) => string) & {
+	readonly baz: readonly boolean[];
+}>(readonlyNamespace);
+expectAssignable<{
+	(foo: number): string;
+	readonly baz: readonly boolean[];
+}>(readonlyNamespace);

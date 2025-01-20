@@ -1,41 +1,61 @@
-import type {ToString} from './internal';
+import type {StaticPartOfArray, VariablePartOfArray, NonRecursiveType, ToString, IsNumberLike} from './internal';
 import type {EmptyObject} from './empty-object';
 import type {IsAny} from './is-any';
-import type {IsNever} from './is-never';
 import type {UnknownArray} from './unknown-array';
-import type {UnknownRecord} from './unknown-record';
+import type {Subtract} from './subtract';
+import type {GreaterThan} from './greater-than';
 
 /**
-Return the part of the given array with a fixed index.
+Paths options.
 
-@example
-```
-type A = [string, number, boolean, ...string[]];
-type B = FilterFixedIndexArray<A>;
-//=> [string, number, boolean]
-```
+@see {@link Paths}
 */
-type FilterFixedIndexArray<T extends UnknownArray, Result extends UnknownArray = []> =
-	number extends T['length'] ?
-		T extends readonly [infer U, ...infer V]
-			? FilterFixedIndexArray<V, [...Result, U]>
-			: Result
-		: T;
+export type PathsOptions = {
+	/**
+	The maximum depth to recurse when searching for paths.
 
-/**
-Return the part of the given array with a non-fixed index.
+	@default 10
+	*/
+	maxRecursionDepth?: number;
 
-@example
-```
-type A = [string, number, boolean, ...string[]];
-type B = FilterNotFixedIndexArray<A>;
-//=> string[]
-```
-*/
-type FilterNotFixedIndexArray<T extends UnknownArray> =
-T extends readonly [...FilterFixedIndexArray<T>, ...infer U]
-	? U
-	: [];
+	/**
+	Use bracket notation for array indices and numeric object keys.
+
+	@default false
+
+	@example
+	```
+	type ArrayExample = {
+		array: ['foo'];
+	};
+
+	type A = Paths<ArrayExample, {bracketNotation: false}>;
+	//=> 'array' | 'array.0'
+
+	type B = Paths<ArrayExample, {bracketNotation: true}>;
+	//=> 'array' | 'array[0]'
+	```
+
+	@example
+	```
+	type NumberKeyExample = {
+		1: ['foo'];
+	};
+
+	type A = Paths<NumberKeyExample, {bracketNotation: false}>;
+	//=> 1 | '1' | '1.0'
+
+	type B = Paths<NumberKeyExample, {bracketNotation: true}>;
+	//=> '[1]' | '[1][0]'
+	```
+	*/
+	bracketNotation?: boolean;
+};
+
+type DefaultPathsOptions = {
+	maxRecursionDepth: 10;
+	bracketNotation: false;
+};
 
 /**
 Generate a union of all possible paths to properties in the given object.
@@ -78,30 +98,73 @@ open('listB.1'); // TypeError. Because listB only has one element.
 @category Object
 @category Array
 */
-export type Paths<T extends UnknownRecord | UnknownArray> =
-	IsAny<T> extends true
-		? never
-		: T extends UnknownArray
-			? number extends T['length']
-				// We need to handle the fixed and non-fixed index part of the array separately.
-				? InternalPaths<FilterFixedIndexArray<T>>
-				| InternalPaths<Array<FilterNotFixedIndexArray<T>[number]>>
-				: InternalPaths<T>
-			: InternalPaths<T>;
+export type Paths<T, Options extends PathsOptions = {}> = _Paths<T, {
+	// Set default maxRecursionDepth to 10
+	maxRecursionDepth: Options['maxRecursionDepth'] extends number ? Options['maxRecursionDepth'] : DefaultPathsOptions['maxRecursionDepth'];
+	// Set default bracketNotation to false
+	bracketNotation: Options['bracketNotation'] extends boolean ? Options['bracketNotation'] : DefaultPathsOptions['bracketNotation'];
+}>;
 
-export type InternalPaths<_T extends UnknownRecord | UnknownArray, T = Required<_T>> =
-	T extends EmptyObject | readonly []
+type _Paths<T, Options extends Required<PathsOptions>> =
+	T extends NonRecursiveType | ReadonlyMap<unknown, unknown> | ReadonlySet<unknown>
 		? never
-		: {
-			[Key in keyof T]:
-			Key extends string | number // Limit `Key` to string or number.
-				? T[Key] extends UnknownRecord | UnknownArray
-					? (
-						IsNever<Paths<T[Key]>> extends false
-							// If `Key` is a number, return `Key | `${Key}``, because both `array[0]` and `array['0']` work.
-							? Key | ToString<Key> | `${Key}.${Paths<T[Key]>}`
-							: Key | ToString<Key>
-					)
-					: Key | ToString<Key>
-				: never
-		}[keyof T & (T extends UnknownArray ? number : unknown)];
+		: IsAny<T> extends true
+			? never
+			: T extends UnknownArray
+				? number extends T['length']
+					// We need to handle the fixed and non-fixed index part of the array separately.
+					? InternalPaths<StaticPartOfArray<T>, Options>
+					| InternalPaths<Array<VariablePartOfArray<T>[number]>, Options>
+					: InternalPaths<T, Options>
+				: T extends object
+					? InternalPaths<T, Options>
+					: never;
+
+type InternalPaths<T, Options extends Required<PathsOptions>> =
+	Options['maxRecursionDepth'] extends infer MaxDepth extends number
+		? Required<T> extends infer T
+			? T extends EmptyObject | readonly []
+				? never
+				: {
+					[Key in keyof T]:
+					Key extends string | number // Limit `Key` to string or number.
+						? (
+							Options['bracketNotation'] extends true
+								? IsNumberLike<Key> extends true
+									? `[${Key}]`
+									: (Key | ToString<Key>)
+								: never
+								|
+								Options['bracketNotation'] extends false
+								// If `Key` is a number, return `Key | `${Key}``, because both `array[0]` and `array['0']` work.
+									? (Key | ToString<Key>)
+									: never
+						) extends infer TranformedKey extends string | number ?
+						// 1. If style is 'a[0].b' and 'Key' is a numberlike value like 3 or '3', transform 'Key' to `[${Key}]`, else to `${Key}` | Key
+						// 2. If style is 'a.0.b', transform 'Key' to `${Key}` | Key
+							| TranformedKey
+							| (
+								// Recursively generate paths for the current key
+								GreaterThan<MaxDepth, 0> extends true // Limit the depth to prevent infinite recursion
+									? _Paths<T[Key], {bracketNotation: Options['bracketNotation']; maxRecursionDepth: Subtract<MaxDepth, 1>}> extends infer SubPath
+										? SubPath extends string | number
+											? (
+												Options['bracketNotation'] extends true
+													? SubPath extends `[${any}]` | `[${any}]${string}`
+														? `${TranformedKey}${SubPath}` // If next node is number key like `[3]`, no need to add `.` before it.
+														: `${TranformedKey}.${SubPath}`
+													: never
+											) | (
+												Options['bracketNotation'] extends false
+													? `${TranformedKey}.${SubPath}`
+													: never
+											)
+											: never
+										: never
+									: never
+							)
+							: never
+						: never
+				}[keyof T & (T extends UnknownArray ? number : unknown)]
+			: never
+		: never;

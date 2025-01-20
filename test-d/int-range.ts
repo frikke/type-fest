@@ -1,4 +1,4 @@
-import {expectType, expectError, expectAssignable} from 'tsd';
+import {expectType, expectAssignable} from 'tsd';
 import type {IntRange} from '../source/int-range';
 
 declare const test: IntRange<0, 5>;
@@ -16,3 +16,10 @@ expectType<10>(stepTest2);
 
 declare const maxNumberTest: IntRange<0, 999>;
 expectAssignable<number>(maxNumberTest);
+
+// Not yet supported.
+// declare const negative: IntRange<-1, 1>;
+// expectType<-1 | 0 | 1>(negative);
+
+// declare const negative2: IntRange<1, -1>;
+// expectType<-1 | 0 | 1>(negative2);
